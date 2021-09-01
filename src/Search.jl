@@ -1,9 +1,16 @@
-using LinearAlgebra: norm 
+using LinearAlgebra: norm
 
 export RandomSearch, NullSearch
 
+"""
+    Search(p::DSProblem{T})::IterationOutcome  where T
+
+Generate search points and call evaluate on them.
+"""
 function Search(p::DSProblem{T})::IterationOutcome  where T
-    points = GenerateSearchPoints(p, p.search)
+    p.status.search_time_total += @elapsed points = GenerateSearchPoints(p, p.config.search)
+    p.full_output && OutputSearchStep(p, points)
+    p.status.directions = nothing
     return EvaluatePoint!(p, points)
 end
 
@@ -23,7 +30,7 @@ Search method that returns an empty vector.
 
 Use when no search method is desired.
 """
-GenerateSearchPoints(p::DSProblem, ::NullSearch) = []
+(GenerateSearchPoints(p::DSProblem{T}, ::NullSearch)::Vector{Vector{T}}) where T = Vector{T}[]
 
 
 """
@@ -31,7 +38,7 @@ GenerateSearchPoints(p::DSProblem, ::NullSearch) = []
 
 Calls `GenerateSearchPoints` for the search step within `p`.
 """
-(GenerateSearchPoints(p::DSProblem{T})::Vector{Vector{T}}) where T = GenerateSearchPoints(p, p.search)
+(GenerateSearchPoints(p::DSProblem{T})::Vector{Vector{T}}) where T = GenerateSearchPoints(p, p.config.search)
 
 """
     RandomSearch(M::Int)
@@ -47,21 +54,20 @@ end
 
 Finds points that are Δᵐ distance from any point in the mesh in a uniformly random direction.
 """
-(GenerateSearchPoints(p::DSProblem{T}, s::RandomSearch)::Vector{Vector{T}}) where T = 
-                    RandomPointsFromCache(p.N, p.cache, p.mesh.Δᵐ, s)
+(GenerateSearchPoints(p::DSProblem{T}, s::RandomSearch)::Vector{Vector{T}}) where T =
+                    RandomPointsFromCache(p.N, p.cache, p.config.mesh.δ, s)
 
-function RandomPointsFromCache(N::Int, c::PointCache{T}, dist::T, s::RandomSearch
+function RandomPointsFromCache(N::Int, c::PointCache{T}, dist::Vector{T}, s::RandomSearch
                               )::Vector{Vector{T}} where T
-    mesh_points = CacheRandomSample(c, s.M)     
+    mesh_points = CacheRandomSample(c, s.M)
 
     if length(mesh_points) == s.M
         for i in 1:s.M
             dir = rand(N)
-            dir *= dist/norm(dir)
+            dir .*= dist./norm(dir)
             mesh_points[i] += dir
         end
     end
 
     return mesh_points
 end
-

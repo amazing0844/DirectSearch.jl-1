@@ -39,7 +39,7 @@ using LinearAlgebra
         L = DS.L_generation(N, l)
         b, I = DS.b_l_generation(Dict{T,Vector{T}}(), Dict{T,Int64}(), l, N)
         p = shuffle!(setdiff(1:N, I))
-        
+
         B = DS.B_generation(N, I, b, L, perm=p)
         @test all([B[p[i],1:N-1] == L[i,:] for i=1:N-1])
         @test all(B[I, 1:N-1] .== 0 )
@@ -57,7 +57,7 @@ using LinearAlgebra
         p = [4,1,2,5]
         q = [5,1,3,2,4]
         N = 5
-        
+
         B = [ 3.0  4.0  0.0 0.0 -3.0;
              -1.0  2.0 -4.0 0.0  2.0;
               0.0  0.0  0.0 0.0  4.0;
@@ -73,7 +73,7 @@ using LinearAlgebra
              -2.0 4.0  0.0  0.0  1.0]
         _B′ = DS.B′_generation(B, N, perm=q)
         @test _B′ == B′
-        
+
         Dₖmin = [ 4.0 0.0  0.0 -3.0  3.0 -4.0;
                   2.0 0.0 -4.0  2.0 -1.0  1.0;
                   0.0 0.0  0.0  4.0  0.0 -4.0;
@@ -90,31 +90,32 @@ using LinearAlgebra
     end
 
     @testset "LTMADS" begin
-        LTM = DS.DSProblem{T}(3, poll=LTMADS{T}())
-        @test !isdefined(LTM, :objective)
-        @test isdefined(LTM, :constraints)
-        @test LTM.sense == DS.Min
-        @test LTM.N == 3
-        @test LTM.status == DS.Unoptimized
+        p = DS.DSProblem{T}(3, poll=LTMADS{T}())
+        @test !isdefined(p, :objective)
+        @test isdefined(p, :constraints)
+        @test p.sense == DS.Min
+        @test p.N == 3
+        @test p.status.optimization_status_string == "Unoptimized"
+        @test p.status.optimization_status == DS.Unoptimized
     end
 
     @testset "MeshUpdate" begin
         p = DS.DSProblem{T}(3, poll=LTMADS{T}())
-        @test p.mesh.Δᵐ == 1
+        @test p.config.mesh.Δᵐ == 1
         DS.MeshUpdate!(p, DS.Unsuccessful)
-        @test p.mesh.Δᵐ == 1/4
+        @test p.config.mesh.Δᵐ == 1/4
         DS.MeshUpdate!(p, DS.Dominating)
-        @test p.mesh.Δᵐ == 1
+        @test p.config.mesh.Δᵐ == 1
         DS.MeshUpdate!(p, DS.Improving)
-        @test p.mesh.Δᵐ == 1
+        @test p.config.mesh.Δᵐ == 1
         DS.MeshUpdate!(p, DS.Dominating)
-        @test p.mesh.Δᵐ == 1
+        @test p.config.mesh.Δᵐ == 1
         DS.MeshUpdate!(p, DS.Unsuccessful)
         DS.MeshUpdate!(p, DS.Unsuccessful)
-        @test p.mesh.Δᵐ == 1/16
+        @test p.config.mesh.Δᵐ == 1/16
         DS.MeshUpdate!(p, DS.Improving)
-        @test p.mesh.Δᵐ == 1/16
+        @test p.config.mesh.Δᵐ == 1/16
         DS.MeshUpdate!(p, DS.Dominating)
-        @test p.mesh.Δᵐ == 1/4
+        @test p.config.mesh.Δᵐ == 1/4
     end
 end

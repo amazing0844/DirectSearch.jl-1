@@ -1,47 +1,48 @@
-using LinearAlgebra 
+using LinearAlgebra
 
 @testset "OrthoMADS" begin
     @testset "Initialisation" begin
 
         #Check that constructor defaults to parametric type Float64
-        _om = OrthoMADS(3)
-        om = OrthoMADS{Float64,Int64}(3)
+        _om = OrthoMADS()
+        om = OrthoMADS{Float64,Int64}()
+
+        @test isdefined(om, :t)
+        @test isdefined(om, :tmax)
+        @test isdefined(om, :t₀)
+        @test _om.l == om.l
+        @test _om.init_run == om.init_run
         @test _om.Δᵖmin == om.Δᵖmin
-        @test _om.t₀ == om.t₀
-        @test _om.t == om.t
-        @test _om.tmax == om.tmax
-
-
-        #Check that expected values are given for n=5
+        @test om.l == 0
+        @test om.init_run == false
         @test om.Δᵖmin == 1.0
-        @test om.t == 5
-        @test om.t₀ == 5
-        @test om.tmax == 5
 
-        om = OrthoMADS{Float64,Int64}(5)
+        primes = [
+           2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61,
+           67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137,
+           139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211,
+           223, 227, 229
+        ]
 
-        #Check that expected values are given for n=11
-        @test om.Δᵖmin == 1.0
-        @test om.t == 11
-        @test om.t₀ == 11
-        @test om.tmax == 11
-
-        #Check that error is raised for negative and 0 valued n
-        @test_throws DomainError OrthoMADS{Float64,Int64}(0)
-        @test_throws DomainError OrthoMADS{Float64,Int64}(-1)
+        for N = 1:50
+            om = OrthoMADS{Float64,Int64}()
+            @test om.init_run == false
+            DS.init_orthomads(N, om)
+            @test om.t == om.tmax == om.t₀ == primes[N]
+            @test om.init_run == true
+        end
     end
 
     @testset "MeshUpdate" begin
-        #input(N) = (DS.Mesh(N), OrthoMADS(N))
         @testset "mesh index, l" begin
             #=
             Combining rules from progressive barrier and OrthoMADS, the index
             should decrement on a successful iteration (dominating), stay the same
             on an improving iteration, and increment on a failure.
             =#
-            p = DSProblem(4;poll=OrthoMADS(4))
-            m = p.mesh
-            o = p.poll
+            p = DSProblem(4;poll=OrthoMADS())
+            m = p.config.mesh
+            o = p.config.poll
            @test m.l == 0
             DS.MeshUpdate!(p, DS.Dominating)
             @test m.l == -1
@@ -75,9 +76,9 @@ using LinearAlgebra
         end
 
         @testset "poll size parameter, Δᵖ" begin
-            p = DSProblem(4;poll=OrthoMADS(4))
-            m = p.mesh
-            o = p.poll
+            p = DSProblem(4;poll=OrthoMADS())
+            m = p.config.mesh
+            o = p.config.poll
 
             #= Should evaluate to 2^-l =#
             @test m.Δᵖ == 1.0
@@ -116,9 +117,9 @@ using LinearAlgebra
             @test m.Δᵖ == 0.0625
         end
         @testset "mesh size parameter, Δᵐ" begin
-            p = DSProblem(4;poll=OrthoMADS(4))
-            m = p.mesh
-            o = p.poll
+            p = DSProblem(4;poll=OrthoMADS())
+            m = p.config.mesh
+            o = p.config.poll
 
             #= Should evaluate to min(1, 4^(-l)) =#
             @test m.Δᵐ == 1.0
@@ -153,28 +154,30 @@ using LinearAlgebra
             @test m.Δᵐ == 0.0625
         end
         @testset "Halton index, tᵐ" begin
-            p = DSProblem(4;poll=OrthoMADS(4))
-            m = p.mesh
-            o = p.poll
-            
+            N = 4
+            p = DSProblem(N; poll=OrthoMADS())
+            m = p.config.mesh
+            o = p.config.poll
+            DS.init_orthomads(N, o)
+
             #=
             If the poll size is the smallest so far then:
                 t = l + t₀
             Otherwise:
                 t = 1 + tmax
-                
+
 
             tmax is the largest considered value of t
             t₀ stays constant
             =#
             @test o.t == 7 #the 4th prime number
-            @test o.tmax == 7 
-            @test o.t₀ == 7 
+            @test o.tmax == 7
+            @test o.t₀ == 7
 
             #Successful (dominating) iterations cause a decrease in poll size
             #Improving iterations cause no change in poll size
             #Failed iterations cause an increase in poll size
-            
+
             DS.MeshUpdate!(p, DS.Improving)
             #Poll size remains the same, ∴ t = tmax = 7 + 1
             @test o.t == 8
@@ -225,7 +228,7 @@ using LinearAlgebra
 
             DS.MeshUpdate!(p, DS.Improving)
             #Poll remains the same, ∴ t = tmax + 1 = 13 + 1 = 14
-            @test o.t == 14 
+            @test o.t == 14
             @test o.tmax == 14
             @test o.t₀ == 7
 
@@ -241,7 +244,7 @@ using LinearAlgebra
             DS.MeshUpdate!(p, DS.Unsuccessful)
             DS.MeshUpdate!(p, DS.Unsuccessful)
             DS.MeshUpdate!(p, DS.Unsuccessful)
-            #Multiple decreases will update tmax 
+            #Multiple decreases will update tmax
             @test o.t == 15
             @test o.tmax == 15
             @test o.t₀ == 7
@@ -345,13 +348,13 @@ using LinearAlgebra
         @test DS.HaltonEntry(3, t) ≈ 7/9
         @test DS.HaltonEntry(5, t) ≈ 1/25
         @test DS.HaltonEntry(7, t) ≈ 5/7
-        
+
         t = 6
         @test DS.HaltonEntry(2, t) ≈ 3/8
         @test DS.HaltonEntry(3, t) ≈ 2/9
         @test DS.HaltonEntry(5, t) ≈ 6/25
         @test DS.HaltonEntry(7, t) ≈ 6/7
-        
+
         t = 7
         @test DS.HaltonEntry(2, t) ≈ 7/8
         @test DS.HaltonEntry(3, t) ≈ 5/9
@@ -379,13 +382,13 @@ using LinearAlgebra
 
         t = 5
         @test DS.Halton(N, t) ≈ [5/8,7/9,1/25,5/7]
-        
+
         t = 6
         @test DS.Halton(N, t) ≈ [3/8, 2/9, 6/25, 6/7]
-        
+
         t = 7
         @test DS.Halton(N, t) ≈ [7/8, 5/9, 11/25, 1/49]
-    end 
+    end
 
     @testset "AdjustedHaltonFamily" begin
         f = DS.AdjustedHaltonFamily([1/2, 1/3, 1/5, 1/7])
@@ -399,10 +402,10 @@ using LinearAlgebra
 
     @testset "argmax" begin
         #General argmax test, due to the rounding also done, being within 0.1 is more than
-        #sufficient 
+        #sufficient
         f(x) = 0.1x^2 + x
         @test isapprox(DS.argmax(0, f, 6), 4.2195444, atol=0.1)
-        
+
         g = DS.AdjustedHaltonFamily([7/8,5/9,11/25,1/49])
         @test isapprox(DS.argmax(0.0, x->norm(g(x)), 1.0), 0.8, atol = 0.1)
 
@@ -445,7 +448,7 @@ using LinearAlgebra
 											  12.0  -60.0   54.0   96.0;
 											 -16.0   80.0   96.0   -2.0]
     end
-    
+
 	@testset "Basis Generation" begin
         N = 4
         DS.GenerateOMBasis(N, 7, 0)  ==  [1 0 0 0;    0 1 0 0; 0 0 1 0; 0 0 0 -1]
@@ -459,12 +462,12 @@ using LinearAlgebra
 	end
 
     @testset "GenerateDirections" begin
-        p = DSProblem(4; poll=OrthoMADS(4))
+        p = DSProblem(4; poll=OrthoMADS())
         #Initially t=7, l=0
         D = [1 0 0 0 -1 0 0 0; 0 1 0 0 0 -1 0 0; 0 0 1 0 0 0 -1 0; 0 0 0 -1 0 0 0 1]
         @test DS.GenerateDirections(p) == D
-        @test DS.GenerateDirections(p, p.poll) == D
-        @test DS.GenerateDirections(4, p.poll) == D
+        @test DS.GenerateDirections(p, p.config.poll) == D
+        @test DS.GenerateDirections(4, p.config.poll) == D
     end
 end
 
