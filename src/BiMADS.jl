@@ -436,7 +436,7 @@ function Optimize_Bi!(p::DSProblem)
         println("Add new points:",count)
         println("Hyper-Volume:",hvIndicator(undominated_points))
         println("Total undominated points: ", length(undominated_points))
-        # println("===============================")
+        println("===============================")
         iteration_count+=1
 # iteration_count>tti && break
 # @show p_reform.status.optimization_status
